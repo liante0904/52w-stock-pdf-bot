@@ -1,20 +1,12 @@
-# Python 3.10 베이스 이미지 사용
-FROM python:3.10.12-slim
+FROM python:3.12-slim
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uv/bin/
 
-# 작업 디렉토리 설정
 WORKDIR /app
+COPY pyproject.toml uv.lock .env ./
+RUN /uv/bin/uv sync --frozen --no-dev
 
-# requirements.txt를 먼저 복사
-COPY requirements.txt requirements.txt
-
-# 의존성 설치
-RUN pip install --no-cache-dir -r requirements.txt
-
-# 나머지 소스 코드 복사
 COPY . .
+# fonts 폴더 복사 (존재할 경우)
+RUN if [ -d "./fonts" ]; then cp -r ./fonts /usr/share/fonts/; fi
 
-# fonts 폴더 복사
-COPY ./fonts /usr/share/fonts/
-
-# 기본 명령 설정
-CMD ["tail", "-f", "/dev/null"]
+CMD ["/uv/bin/uv", "run", "python", "app.py"]

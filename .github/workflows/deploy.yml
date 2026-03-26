@@ -3,10 +3,10 @@ name: Deploy and Sync Changed Files
 on:
   push:
     branches:
-      - master  # master 브랜치에 푸시될 때 트리거
+      - main  # main 브랜치에 푸시될 때 트리거
   pull_request:
     branches:
-      - master  # master 브랜치에 PR이 열릴 때 트리거
+      - main  # main 브랜치에 PR이 열릴 때 트리거
 
 jobs:
   deploy:
@@ -49,8 +49,8 @@ jobs:
           cd ${{ secrets.PROJECT_DIR }}
 
           # Git 업데이트
-          git fetch --all && git reset --hard origin/master
-          git pull origin master
+          git fetch --all && git reset --hard origin/main
+          git pull origin main
 
           # .env 갱신
           cp -rf .env ./jp/.env

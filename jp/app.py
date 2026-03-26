@@ -15,6 +15,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+from datetime import date
+
 load_dotenv()
 token = os.getenv('TELEGRAM_BOT_TOKEN_REPORT_ALARM')
 chat_id = os.getenv('TELEGRAM_CHANNEL_ID_STOCK_INDICATOR')
@@ -22,8 +24,16 @@ SCHEDULE_HOUR = int(os.getenv('SCHEDULE_HOUR', 8))
 SCHEDULE_MINUTE = int(os.getenv('SCHEDULE_MINUTE', 0))
 
 job_lock = asyncio.Lock()
+last_success_date = None
 
 async def job():
+    global last_success_date
+    today = date.today()
+    
+    if last_success_date == today:
+        logger.info(f"Job for {today} already completed successfully. Skipping.")
+        return
+
     if job_lock.locked():
         logger.warning("Job is already running. Skipping this trigger.")
         return
@@ -51,9 +61,11 @@ async def job():
             if topix_pdf_file_name:
                 try: await sendMarkDownText(token=token, chat_id=chat_id, file=topix_pdf_file_name, title="TOPIX 52주 신고가 PDF")
                 except Exception as e: logger.error(f"TOPIX PDF 전송 오류: {e}", exc_info=True)
+            
+            last_success_date = today
+            logger.info(f"JP stock analysis job finished successfully for {today}.")
         except Exception as e:
             logger.error(f"JP job execution failed: {e}", exc_info=True)
-        logger.info("JP stock analysis job finished.")
 
 async def main():
     scheduler = AsyncIOScheduler()

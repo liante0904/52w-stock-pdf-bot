@@ -7,7 +7,6 @@ USE_VENV=true  # true로 설정하면 버추얼 환경에서 실행
 # 설치할 패키지 목록
 PACKAGES=(
   "yfinance"
-  "googletrans==4.0.0-rc1"
 )
 
 # pyenv 초기화

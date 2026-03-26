@@ -1,6 +1,5 @@
 import requests
 import pandas as pd
-from googletrans import Translator
 import numpy as np
 import asyncio
 import sys
@@ -25,13 +24,16 @@ print("마이크로초 : ", now.microsecond)
 print("요일 : ", now.weekday())
 print("문자열 변환 : ", now.strftime('%Y%m%d')[2:8])
 
-pdf_file_name = f"{now.strftime('%Y%m%d')[2:8]}_nsd100_52wk_high.pdf"
-
 # 현재 파일 기준으로 상위 디렉토리에 있는 .env 파일 경로 설정
 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
 env_path = os.path.join(base_dir, '.env')
 load_dotenv(dotenv_path=env_path)
+
+pdf_save_dir = os.getenv('PDF_SAVE_DIR', '.')
+if not os.path.exists(pdf_save_dir):
+    os.makedirs(pdf_save_dir, exist_ok=True)
+
+pdf_file_name = os.path.join(pdf_save_dir, f"{now.strftime('%Y%m%d')[2:8]}_nsd100_52wk_high.pdf")
 
 # 현재 스크립트의 상위 디렉터리 경로를 추가
 sys.path.append(base_dir)
@@ -46,9 +48,6 @@ load_dotenv(dotenv_path=env_path)
 # 환경 변수 사용
 env = os.getenv('ENV')
 naver_api_snp = os.getenv('NAVER_API_NQ100')
-
-# Translator 객체 생성
-translator = Translator()
 
 # 네이버 API에서 NASDAQ 100 종목 가져오기
 def get_nasdaq100_symbols_from_naver():

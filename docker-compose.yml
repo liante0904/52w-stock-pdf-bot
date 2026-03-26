@@ -1,26 +1,65 @@
 services:
-  us-52w-hl-stock:
+  us-52w-hl-stock-v2:
     build:
       context: ./us
-    image: us-52w-hl-stock:latest
-    container_name: us-52w-hl-stock
+    image: us-52w-hl-stock:v2
+    container_name: us-52w-hl-stock-v2
     env_file:
       - ./us/.env
     volumes:
-      - ./utils:/app/utils  # utils 디렉터리를 컨테이너에 마운트
+      - ./utils:/app/utils:ro
+      - ./pdf:/app/pdf
     working_dir: /app
-    command: ["tail", "-f", "/dev/null"]
     restart: unless-stopped
+    command: ["uv", "run", "python", "app.py"]
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      - SCHEDULE_HOUR=15
+      - SCHEDULE_MINUTE=40
+      - PYTHONUNBUFFERED=1
+      - TZ=Asia/Seoul
+      - PDF_SAVE_DIR=/app/pdf
 
-  jp-52w-hl-stock:
+  jp-52w-hl-stock-v2:
     build:
       context: ./jp
-    image: jp-52w-hl-stock:latest
-    container_name: jp-52w-hl-stock
+    image: jp-52w-hl-stock:v2
+    container_name: jp-52w-hl-stock-v2
     env_file:
       - ./jp/.env
     volumes:
-      - ./utils:/app/utils  # utils 디렉터리를 컨테이너에 마운트
+      - ./utils:/app/utils:ro
+      - ./pdf:/app/pdf
     working_dir: /app
-    command: ["tail", "-f", "/dev/null"]
     restart: unless-stopped
+    command: ["uv", "run", "python", "app.py"]
+    environment:
+      - SCHEDULE_HOUR=16
+      - SCHEDULE_MINUTE=00
+      - PYTHONUNBUFFERED=1
+      - TZ=Asia/Seoul
+      - PDF_SAVE_DIR=/app/pdf
+
+  kr-52w-hl-stock-v2:
+    build:
+      context: ./kr
+    image: kr-52w-hl-stock:v2
+    container_name: kr-52w-hl-stock-v2
+    env_file:
+      - ./kr/.env
+    volumes:
+      - ./utils:/app/utils:ro
+      - ./pdf:/app/pdf
+    working_dir: /app
+    restart: unless-stopped
+    command: ["uv", "run", "python", "app.py"]
+    environment:
+      - SCHEDULE_HOUR=16
+      - SCHEDULE_MINUTE=00
+      - PYTHONUNBUFFERED=1
+      - TZ=Asia/Seoul
+      - PDF_SAVE_DIR=/app/pdf

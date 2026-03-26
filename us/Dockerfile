@@ -1,12 +1,12 @@
 FROM python:3.12-slim
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uv/bin/
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 WORKDIR /app
 COPY pyproject.toml uv.lock .env ./
-RUN /uv/bin/uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev
+
+RUN apt-get update && apt-get install -y fonts-nanum && rm -rf /var/lib/apt/lists/*
 
 COPY . .
-# fonts 폴더 복사 (존재할 경우)
-RUN if [ -d "./fonts" ]; then cp -r ./fonts /usr/share/fonts/; fi
 
-CMD ["/uv/bin/uv", "run", "python", "app.py"]
+CMD ["uv", "run", "python", "app.py"]

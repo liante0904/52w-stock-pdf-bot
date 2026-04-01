@@ -1,70 +1,106 @@
-name: Deploy and Sync Changed Files
+name: Build and Deploy to Production
 
 on:
   push:
     branches:
-      - master  # master 브랜치에 푸시될 때 트리거
-  pull_request:
-    branches:
-      - master  # master 브랜치에 PR이 열릴 때 트리거
+      - main
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: liante0904/52w-stock-pdf-bot
 
 jobs:
-  deploy:
+  build-and-push:
     runs-on: ubuntu-latest
-    env:
-      ACTIONS_STEP_DEBUG: true # 비공개 정보 출력 활성화
+    permissions:
+      contents: read
+      packages: write
+
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10.12'  # Python 3.10.12 버전 설정
-        cache: 'pip' # caching pip dependencies
-    - name: Add SSH key
-      uses: webfactory/ssh-agent@v0.5.3
-      with:
-        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
-    - name: Deploy to Server
-      env:
-        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-        SERVER_HOST: ${{ secrets.SERVER_HOST }}
-        SERVER_USER: ${{ secrets.SERVER_USER }}
-        PROJECT_DIR: ${{ secrets.PROJECT_DIR }}
-        PROJECT_NAME: ${{ secrets.PROJECT_NAME }}  # 새로 추가된 환경 변수
-      run: |
-        echo "Starting deployment..."
-        echo "SERVER_HOST: $SERVER_HOST"
-        echo "SERVER_USER: $SERVER_USER"
-        echo "PROJECT_DIR: $PROJECT_DIR"
-        echo "PROJECT_NAME: $PROJECT_NAME"
-        mkdir -p ~/.ssh
-        echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
-        chmod 600 ~/.ssh/id_rsa
-        ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_HOST << 'EOF'
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-        # 실제 배포할 프로젝트 경로
-          cd ${{ secrets.PROJECT_DIR }}
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-          # Git 업데이트
-          git fetch --all && git reset --hard origin/master
-          git pull origin master
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
-          # .env 갱신
-          cp -rf .env ./jp/.env
-          cp -rf .env ./us/.env
-          cp -rf .env ./fear_and_greed/.env
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-          # fonts 폴더 갱신
-          cp -rf fonts/ jp/
-          cp -rf fonts/ us/
-          
-          # Docker-compose로 배포
-          echo "Deploying with Docker Compose for ${{ secrets.PROJECT_NAME }} ..."
-          
-          docker-compose up --build -d
-         
+      - name: Pre-deploy (Prepare permissions)
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            mkdir -p ${{ secrets.PROJECT_DIR }}
+            # 기존 파일이 있다면 권한을 변경하여 SCP 덮어쓰기가 가능하게 함
+            if [ -f ${{ secrets.PROJECT_DIR }}/docker-compose.yml ]; then
+              chmod 666 ${{ secrets.PROJECT_DIR }}/docker-compose.yml
+            fi
 
-        EOF
+      - name: Copy docker-compose.yml via SCP
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: "docker-compose.yml"
+          target: "${{ secrets.PROJECT_DIR }}"
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            cd ${{ secrets.PROJECT_DIR }}
+            
+            # GHCR 로그인 (이미지 pull 권한 획득)
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            
+            # .env 파일이 없으면 상위 폴더에서 찾아봄 (있다면 복사)
+            if [ ! -f .env ]; then
+              if [ -f ../.env ]; then
+                cp ../.env .env
+                echo ".env copied from parent directory."
+              else
+                echo "Error: .env file not found in ${{ secrets.PROJECT_DIR }} or its parent."
+                echo "Please manually create .env in the server before deploying."
+                exit 1
+              fi
+            fi
+            
+            # 기존 구버전(-v2) 컨테이너 정지 및 삭제 (최초 1회 정리용)
+            docker stop us-52w-hl-stock-v2 jp-52w-hl-stock-v2 kr-52w-hl-stock-v2 2>/dev/null || true
+            docker rm us-52w-hl-stock-v2 jp-52w-hl-stock-v2 kr-52w-hl-stock-v2 2>/dev/null || true
+            
+            # 새 이미지 풀 및 서비스 재시작
+            docker-compose pull
+            docker-compose up -d --remove-orphans

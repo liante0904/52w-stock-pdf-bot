@@ -19,7 +19,6 @@ def is_valid_ticker(ticker):
     """
     주어진 티커가 유효한지 확인하는 함수입니다.
     """
-    print(f"Checking ticker: {ticker}")
 
     # 티커가 문자열인지 확인
     if not isinstance(ticker, str):
@@ -104,21 +103,75 @@ def create_pdf(filename, data):
             pdf.set_font('NanumGothic-Bold', size=18)
             pdf.cell(200, 10, txt=f"티커: {item['Ticker']}", ln=True)
             pdf.cell(200, 10, txt=f"종목명: {item['Name']}", ln=True)
+            # 미국&일본 주식 처리
+            pdf.set_font('NanumGothic-Bold', size=18)
+            stock_info_url = f"https://m.stock.naver.com/worldstock/stock/{item['Ticker']}/total"
+            
+            # '종목정보: 네이버 증권' 형식으로 출력
+            pdf.set_text_color(0, 0, 0)  # 기본 텍스트 색상
+            pdf.write(10, "종목정보: ")
+            
+            # '네이버 증권'에 하이퍼링크 추가
+            pdf.set_text_color(0, 0, 255)  # 하이퍼링크는 파란색으로 설정
+            pdf.write(10, "네이버 증권", link=stock_info_url)
+            
+            # 텍스트 색상 복원
+            pdf.set_text_color(0, 0, 0)
+            pdf.ln(10)  # 줄 바꿈
+
+            # if item['Ticker'].endswith('.T'):
+            #     # 일본 주식 처리
+            #     pdf.set_font('NanumGothic-Bold', size=18)
+            #     stock_info_url = f"https://m.stock.naver.com/worldstock/stock/{item['Ticker']}/total"
+                
+            #     # '종목정보: 네이버 증권' 형식으로 출력
+            #     pdf.set_text_color(0, 0, 0)  # 기본 텍스트 색상
+            #     pdf.write(10, "종목정보: ")
+                
+            #     # '네이버 증권'에 하이퍼링크 추가
+            #     pdf.set_text_color(0, 0, 255)  # 하이퍼링크는 파란색으로 설정
+            #     pdf.write(10, "네이버 증권", link=stock_info_url)
+                
+            #     # 텍스트 색상 복원
+            #     pdf.set_text_color(0, 0, 0)
+            #     pdf.ln(10)  # 줄 바꿈
+
+            # else:
+            #     # 미국 주식 처리
+            #     pdf.set_font('NanumGothic-Bold', size=18)
+            #     stock_info_url = f"https://finviz.com/quote.ashx?t={item['Ticker']}"
+                
+            #     # '종목정보: 네이버 증권' 형식으로 출력
+            #     pdf.set_text_color(0, 0, 0)  # 기본 텍스트 색상
+            #     pdf.write(10, "종목정보: ")
+                
+            #     # '네이버 증권'에 하이퍼링크 추가
+            #     pdf.set_text_color(0, 0, 255)  # 하이퍼링크는 파란색으로 설정
+            #     pdf.write(10, "finviz", link=stock_info_url)
+                
+            #     # 텍스트 색상 복원
+            #     pdf.set_text_color(0, 0, 0)
+            #     pdf.ln(10)  # 줄 바꿈
+
 
             pdf.ln(10)
 
             ticker = item['Ticker']
             print(ticker)
             if is_valid_ticker(ticker):
-                print(ticker)
-                if ".T" in ticker:
-                    # 일본 주식 처리
-                    img_url = f"https://ssl.pstatic.net/imgfinance/chart/mobile/world/item/candle/day/{ticker}_end.png"
-                    pdf.set_font('NanumGothic-Bold', size=18)
-                    pdf.cell(0, 10, txt=f"{item['Name']}({(item['Ticker'])})의 일봉차트", ln=True)
-                else:
-                    # 미국 주식 처리
-                    img_url = f"https://finviz.com/chart.ashx?t={ticker}&ty=c&ta=1&p=d"
+                
+                # 미국&일본 주식 일봉 이미지처리
+                img_url = f"https://ssl.pstatic.net/imgfinance/chart/mobile/world/item/candle/day/{ticker}_end.png"
+                pdf.set_font('NanumGothic-Bold', size=18)
+                pdf.cell(0, 10, txt=f"{item['Name']}({(item['Ticker'])})의 일봉차트", ln=True)
+                # if ".T" in ticker:
+                #     # 일본 주식 처리
+                #     img_url = f"https://ssl.pstatic.net/imgfinance/chart/mobile/world/item/candle/day/{ticker}_end.png"
+                #     pdf.set_font('NanumGothic-Bold', size=18)
+                #     pdf.cell(0, 10, txt=f"{item['Name']}({(item['Ticker'])})의 일봉차트", ln=True)
+                # else:
+                #     # 미국 주식 처리
+                #     img_url = f"https://finviz.com/chart.ashx?t={ticker}&ty=c&ta=1&p=d"
 
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_img:
                     img_path = download_image(img_url, temp_img.name)
@@ -137,6 +190,12 @@ def create_pdf(filename, data):
             pdf.set_font('NanumGothic', size=16)
             pdf.multi_cell(0, 10, txt=f"사업내용: {item['Business Profile']}", align="L")
 
+            pdf.ln(10)
+            
+            # 구분선 추가 
+            pdf.set_font('NanumGothic', size=16)
+            pdf.cell(200, 10, txt=f"=" * 50, ln=True)
+            
             pdf.ln(20)
 
     pdf.output(filename)

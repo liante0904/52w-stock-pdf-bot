@@ -1,0 +1,16 @@
+[project]
+name = "jp"
+version = "0.1.0"
+description = "Japan 52w high/low stock indicator bot"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "apscheduler==3.10.4",
+    "fpdf2==2.7.8",
+    "numpy==2.2.3",
+    "pandas==2.2.3",
+    "python-dotenv==1.0.1",
+    "python-telegram-bot==21.1.1",
+    "requests==2.32.3",
+    "tqdm==4.67.0",
+]

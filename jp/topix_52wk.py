@@ -1,7 +1,5 @@
 import requests
-import yfinance as yf
 import pandas as pd
-from googletrans import Translator
 import numpy as np
 import asyncio
 from tqdm import tqdm
@@ -26,13 +24,16 @@ print("마이크로초 : ", now.microsecond)
 print("요일 : ", now.weekday())
 print("문자열 변환 : ", now.strftime('%Y%m%d')[2:8])
 
-pdf_file_name = f"{now.strftime('%Y%m%d')[2:8]}_topix_52wk_high.pdf"
-
 # 현재 파일 기준으로 상위 디렉토리에 있는 .env 파일 경로 설정
 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
 env_path = os.path.join(base_dir, '.env')
 load_dotenv(dotenv_path=env_path)
+
+pdf_save_dir = os.getenv('PDF_SAVE_DIR', '.')
+if not os.path.exists(pdf_save_dir):
+    os.makedirs(pdf_save_dir, exist_ok=True)
+
+pdf_file_name = os.path.join(pdf_save_dir, f"{now.strftime('%Y%m%d')[2:8]}_topix_52wk_high.pdf")
 
 # 현재 스크립트의 상위 디렉터리 경로를 추가
 sys.path.append(base_dir)
@@ -42,9 +43,6 @@ from utils.pdf_util import create_pdf
 # 환경 변수 사용
 env = os.getenv('ENV')
 naver_api_topx = os.getenv('NAVER_API_TOPIX')
-
-# Translator 객체 생성
-translator = Translator()
 
 # 네이버 API에서 TOPIX 종목 가져오기
 def get_topix_symbols_from_naver():
@@ -62,30 +60,74 @@ def get_topix_symbols_from_naver():
         return []
     
 # 52주 신고가 종목 찾기
-async def find_52_week_high(yf_ticker):
-    try: 
-        stock_data = yf.download(yf_ticker, period='1y', interval='1d', progress=False)['Adj Close']
-        if len(stock_data) == 0:
-            return False  # 주가 데이터가 없는 경우 제외
-        # 52주 최고가를 계산하고, 최근 주가가 52주 최고가와 같은지 확인
-        highest_price_52_weeks = stock_data.max()
-        current_price = stock_data.iloc[-1]
-        return np.isclose(current_price, highest_price_52_weeks)  # 현재 가격과 최고가가 거의 동일하면 True
-    except Exception:
+async def find_52_week_high(stock_code):
+    try:
+        url = f"https://api.stock.naver.com/stock/{stock_code}/basic"
+        
+        # 네이버 API 호출
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()  # HTTP 에러 발생 시 예외 처리
+        
+        # JSON 데이터 파싱
+        data = response.json()
+        stock_info = data.get('stockItemTotalInfos', [])
+        
+        # 52주 최고가와 현재 가격 추출
+        high_52_week = None
+        close_price = float(data.get('closePrice', 0).replace(',', ''))
+        
+        for item in stock_info:
+            if item['code'] == 'highPriceOf52Weeks':
+                high_52_week = float(item['value'].replace(',', ''))  # 쉼표 제거 후 float 변환
+            if item['code'] == 'industryGroupKor':
+                sector = item['value']
+
+        # 현재 가격이 52주 최고가와 거의 동일한지 확인
+        is_high = np.isclose(close_price, high_52_week, rtol=0.01)  # 1% 이내 오차 허용
+        print(f"{stock_code}: 현재가 {close_price}, 52주 최고가 {high_52_week} -> {'신고가' if is_high else '신고가 아님'}")
+        return is_high, sector
+    
+    except requests.RequestException as e:
+        print(f"네이버 API 호출 중 에러 발생 ({stock_code}): {e}")
+        return False
+    except Exception as e:
+        print(f"데이터 처리 중 에러 발생 ({stock_code}): {e}")
         return False
 
 # 회사의 사업내용 및 업종 가져오기
-async def get_company_profile(yf_ticker):
+async def get_company_profile(stock_code):
     try:
-        stock_info = yf.Ticker(yf_ticker).info
-        description = stock_info.get('longBusinessSummary', 'No description available')
-        # 사업내용을 한국어로 번역
-        translated_description = translator.translate(description, src='en', dest='ko').text
-        sector = stock_info.get('sector', 'No sector information')
-        return {'description': translated_description, 'sector': sector}
-    except Exception:
-        return {'description': 'Error fetching or translating profile', 'sector': 'No sector information'}
-
+        url = f"https://api.stock.naver.com/stock/{stock_code}/integration"
+        
+        # 네이버 API 호출
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()  # HTTP 에러 발생 시 예외 처리
+        
+        # JSON 데이터 파싱
+        stock_info = response.json()
+        
+        # 사업 내용 추출
+        if 'corporateOverview' in stock_info:
+            description = stock_info['corporateOverview']
+        else:
+            print(f"'corporateOverview' 키가 stock_info에 없습니다.")
+            return False
+        
+        return description
+        
+    except requests.RequestException as e:
+        print(f"네이버 API 호출 중 에러 발생 ({stock_code}): {e}")
+        return False
+    except Exception as e:
+        print(f"데이터 처리 중 에러 발생 ({stock_code}): {e}")
+        return False
+    
 # 메인 함수: TOPIX 종목 분석
 async def analyze_topix():
     print("TOPIX 종목 목록을 네이버 API에서 가져오는 중...")
@@ -103,13 +145,14 @@ async def analyze_topix():
     # tqdm를 명시적으로 관리
     with tqdm(total=len(topix_tickers_with_names), desc="Analyzing", unit="stock") as pbar:
         for idx, (ticker, name) in enumerate(topix_tickers_with_names):
-            is_high = await find_52_week_high(ticker)
+            profile = {}
+            is_high, profile['sector'] = await find_52_week_high(ticker)
             pbar.update(1)  # 진행 상황 업데이트
             print(f"Analyzing {ticker} ({idx + 1} of {len(topix_tickers_with_names)})...")
             if not is_high:
                 print(f"{ticker} ({name}): 52주 신고가 아님.")
                 continue  # 52주 신고가가 아니면 건너뜀
-            profile = await get_company_profile(ticker)
+            profile['description'] = await get_company_profile(ticker)
             high_52_week_stocks.append((ticker, name, profile['sector'], profile['description']))
             # sector(세 번째 요소) 기준으로 정렬
             high_52_week_stocks.sort(key=lambda x: x[2])
@@ -137,7 +180,6 @@ async def analyze_topix():
 
         high_52_week_stocks_list += "```"
 
-        print(high_52_week_stocks_list)
 
     if not high_52_week_stocks:
         print("\n52주 신고가 종목이 없습니다.")

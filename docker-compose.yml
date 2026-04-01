@@ -1,59 +1,56 @@
 services:
   us-52w-hl-stock:
-    build:
-      context: ./us
-    image: us-52w-hl-stock:latest
+    image: ghcr.io/liante0904/52w-stock-pdf-bot:latest
     container_name: us-52w-hl-stock
-    env_file:
-      - ./us/.env
-    volumes:
-      - ./utils:/app/utils  # utils 디렉터리를 컨테이너에 마운트
-    working_dir: /app
-    command: ["tail", "-f", "/dev/null"]
     restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./pdf:/app/pdf
+    working_dir: /app/us
+    command: ["python", "app.py"]
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      - SCHEDULE_HOUR=15
+      - SCHEDULE_MINUTE=40
+      - PYTHONUNBUFFERED=1
+      - TZ=Asia/Seoul
+      - PDF_SAVE_DIR=/app/pdf
 
   jp-52w-hl-stock:
-    build:
-      context: ./jp
-    image: jp-52w-hl-stock:latest
+    image: ghcr.io/liante0904/52w-stock-pdf-bot:latest
     container_name: jp-52w-hl-stock
-    env_file:
-      - ./jp/.env
-    volumes:
-      - ./utils:/app/utils  # utils 디렉터리를 컨테이너에 마운트
-    working_dir: /app
-    command: ["tail", "-f", "/dev/null"]
     restart: unless-stopped
-
-  selenium:
-    image: seleniarm/standalone-chromium:latest
-    container_name: selenium
-    shm_size: '512m'
-    ports:
-      - "4444:4444"
-      - "7900:7900"
-    restart: unless-stopped
-    networks:
-      - selenium_network
-
-  fear_and_greed:
-    build:
-      context: ./fear_and_greed
-    container_name: fear_and_greed
     env_file:
-      - ./fear_and_greed/.env
+      - .env
     volumes:
-      - ./utils:/app/utils  # utils 디렉터리를 컨테이너에 마운트
-    working_dir: /app
-    command: ["python3", "app.py"]
-    restart: no
+      - ./pdf:/app/pdf
+    working_dir: /app/jp
+    command: ["python", "app.py"]
     environment:
-      - MODE=deploy
-    depends_on:
-      - selenium
-    networks:
-      - selenium_network
+      - SCHEDULE_HOUR=16
+      - SCHEDULE_MINUTE=00
+      - PYTHONUNBUFFERED=1
+      - TZ=Asia/Seoul
+      - PDF_SAVE_DIR=/app/pdf
 
-networks:
-  selenium_network:
-    driver: bridge
+  kr-52w-hl-stock:
+    image: ghcr.io/liante0904/52w-stock-pdf-bot:latest
+    container_name: kr-52w-hl-stock
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./pdf:/app/pdf
+    working_dir: /app/kr
+    command: ["python", "app.py"]
+    environment:
+      - SCHEDULE_HOUR=16
+      - SCHEDULE_MINUTE=00
+      - PYTHONUNBUFFERED=1
+      - TZ=Asia/Seoul
+      - PDF_SAVE_DIR=/app/pdf

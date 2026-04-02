@@ -15,8 +15,7 @@ services:
         max-size: "10m"
         max-file: "3"
     environment:
-      - SCHEDULE_HOUR=15
-      - SCHEDULE_MINUTE=40
+      - SCHEDULE_TIMES=07:40,15:40
       - PYTHONUNBUFFERED=1
       - TZ=Asia/Seoul
       - PDF_SAVE_DIR=/app/pdf
